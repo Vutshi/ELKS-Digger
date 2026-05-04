@@ -23,8 +23,6 @@ https://www.digger.org
 
 ELKS is a small operating system inspired by Linux, designed for old and resource-constrained 16-bit x86 machines.
 
-This port is for people who enjoy seeing classic software run in places where every byte, tick, and keypress still matters.
-
 ## This port
 
 The goal of this port is simple:
