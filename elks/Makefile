@@ -16,7 +16,7 @@ endif
 CC = ia16-elf-gcc
 LD = ia16-elf-gcc
 HOSTCC ?= cc
-HOSTCFLAGS ?= -O2 -I..
+HOSTCFLAGS ?= -O2 -I../src
 CLBASE = -melks-libc -mtune=i8086 -mcmodel=small -mno-segment-relocation-stuff
 CLBASE += -fno-inline -fno-builtin-printf -fno-builtin-fprintf
 OPTFLAGS = -Os
@@ -31,7 +31,7 @@ OPTFLAGS += -fno-reorder-blocks
 OPTFLAGS += -fno-prefetch-loop-arrays
 OPTFLAGS += -fno-tree-ch
 WARNINGS = -Wall -Wextra -Wtype-limits -Wno-unused-parameter -Wno-sign-compare
-INCLUDES = -I. -I.. -Igenerated -I$(TOPDIR)/include -I$(TOPDIR)/libc/include -I$(TOPDIR)/elks/include
+INCLUDES = -I. -I../src -Igenerated -I$(TOPDIR)/include -I$(TOPDIR)/libc/include -I$(TOPDIR)/elks/include
 DEFINES = -include config_elks.h
 CFLAGS = $(OPTFLAGS) $(CLBASE) $(WARNINGS) $(INCLUDES) $(DEFINES) $(LOCALFLAGS)
 LDFLAGS = $(CLBASE)
@@ -43,7 +43,7 @@ LDLIBS =
 %.oaj: %.S
 	$(CC) $(CLBASE) -x assembler-with-cpp -c -o $@ $<
 
-%.oaj: ../%.c
+%.oaj: ../src/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 generated/%.oaj: generated/%.c
@@ -82,8 +82,8 @@ SOUND_SRC = elks_sound_dos.c
 endif
 
 CORE_SRCS = \
-	../main.c ../digger.c ../monster.c ../bags.c ../drawing.c ../sprite.c \
-	../scores.c ../input.c
+	../src/main.c ../src/digger.c ../src/monster.c ../src/bags.c ../src/drawing.c ../src/sprite.c \
+	../src/scores.c ../src/input.c
 
 PORT_SRCS = \
 	elks_hw.c elks_input.c elks_cga.c $(SOUND_SRC)
@@ -95,7 +95,7 @@ ASSET_SRCS = \
 
 ASM_OBJS = elks_cga_asm.oaj
 
-OBJS = $(CORE_SRCS:../%.c=%.oaj) \
+OBJS = $(CORE_SRCS:../src/%.c=%.oaj) \
        $(PORT_SRCS:.c=.oaj) \
        $(ASSET_SRCS:.c=.oaj) \
        $(ASM_OBJS)
@@ -104,17 +104,17 @@ all: $(PROG) $(TITLEBMP_ASSET)
 
 MKG_HOST = mkg.host
 
-$(MKG_HOST): ../mkg.c ../def.h
-	$(HOSTCC) $(HOSTCFLAGS) -o $@ ../mkg.c
+$(MKG_HOST): ../src/mkg.c ../src/def.h
+	$(HOSTCC) $(HOSTCFLAGS) -o $@ ../src/mkg.c
 
 regen-assets: $(MKG_HOST)
-	cd .. && elks/$(MKG_HOST) elks/generated/cgagrafx.c
-	cd .. && elks/$(MKG_HOST) elks/generated/alpha_cga.c
+	cd ../src && elks/$(MKG_HOST) elks/generated/cgagrafx.c
+	cd ../src && elks/$(MKG_HOST) elks/generated/alpha_cga.c
 
 $(PROG): $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(BINDIR)/digtitle.bmp: ../ctitle.bmp
+$(BINDIR)/digtitle.bmp: ../src/ctitle.bmp
 	cp $< $@
 
 SOUNDTEST_OBJS = pcspktest.oaj
