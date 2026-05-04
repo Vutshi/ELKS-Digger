@@ -62,6 +62,21 @@ digger
 
 Keep `digtitle.bmp` next to the binary if you want the title screen.
 
+## Input mapping
+
+```text
+Arrow keys       -> movement
+WASD             -> movement
+Space            -> fire
+Ctrl-Space/NUL   -> fire fallback
+Ctrl-A           -> fire fallback
+p / P            -> pause
+q / Q            -> quit
+Esc              -> quit
+Ctrl-C           -> quit in raw mode
+n / N            -> preserved for title-screen player-count toggle
+```
+
 ## Credits
 
 Digger Remastered was created and maintained by Andrew Jenner and contributors.
