@@ -19,33 +19,6 @@
 
 #define DIGGER_TICKS_PER_MS 1193ul
 
-static unsigned int usec_to_ms(long usec)
-{
-  unsigned int ms = 0;
-
-#define UMS_CHUNK(n) \
-  do { \
-    if (usec >= (long)(n) * 1000L) { \
-      usec -= (long)(n) * 1000L; \
-      ms += (unsigned int)(n); \
-    } \
-  } while (0)
-
-  UMS_CHUNK(512);
-  UMS_CHUNK(256);
-  UMS_CHUNK(128);
-  UMS_CHUNK(64);
-  UMS_CHUNK(32);
-  UMS_CHUNK(16);
-  UMS_CHUNK(8);
-  UMS_CHUNK(4);
-  UMS_CHUNK(2);
-  UMS_CHUNK(1);
-
-#undef UMS_CHUNK
-  return ms;
-}
-
 static struct timeval timer_base;
 static bool timer_started;
 static Uint5 fallback_counter;
@@ -96,7 +69,7 @@ Uint5 gethrt(void)
      * conversion is wasted here and costs extra long division/modulo
      * on 8086-class targets.
      */
-    ms = sec * 1000ul + (unsigned long)usec_to_ms(usec);
+    ms = sec * 1000ul + (unsigned long)(usec / 1000L);
     return (Uint5)(ms * DIGGER_TICKS_PER_MS);
   }
 
