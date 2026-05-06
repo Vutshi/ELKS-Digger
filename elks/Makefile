@@ -60,10 +60,21 @@ LOCALFLAGS = -DDIGGER_ELKS -DDIGGER_CGA_ONLY
 # SOUND=0 keeps the silent/stub build.
 # SOUND=seq uses the ELKS kernel PC-speaker event sequencer for background music.
 SOUND ?= seq
+# Keyboard backend:
+#   KEYBOARD=kraw  default, ELKS console raw scan-code make/break input
+#   KEYBOARD=term  compatibility, old terminal-byte/ANSI escape input
+KEYBOARD ?= kraw
 PROFILE ?= 0
 SPEED ?= 80000
 TITLEBMP ?= 1
 LOCALFLAGS += -DDIGGER_ELKS_DEFAULT_FTIME=$(SPEED)
+ifeq ($(KEYBOARD),kraw)
+LOCALFLAGS += -DDIGGER_ELKS_KBD_KRAW
+else ifeq ($(KEYBOARD),term)
+LOCALFLAGS += -DDIGGER_ELKS_KBD_TERM
+else
+$(error Unknown KEYBOARD=$(KEYBOARD), expected kraw or term)
+endif
 ifeq ($(TITLEBMP),1)
 LOCALFLAGS += -DDIGGER_ELKS_TITLE_BMP
 TITLEBMP_ASSET = $(BINDIR)/digtitle.bmp

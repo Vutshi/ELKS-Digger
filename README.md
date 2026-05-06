@@ -33,22 +33,25 @@ The gameplay, timing, sounds, title screen, high-score flow, and overall feel ar
 
 ## Building
 
-From the ELKS build directory:
+ELKS  `TOPDIR=/path/to/elks` should be specified. 
+Build from the `elks/` directory:
 
 ```sh
-cd elks
 make
-```
+````
 
-The build also places the title image next to the game binary so it can be found at runtime.
+Options:
 
-Useful build variants may include:
+* `KEYBOARD=kraw` — default; raw scancode keyboard input with key press/release events.
+* `KEYBOARD=term` — compatibility terminal input backend.
+* `SOUND=seq` — default; ELKS kernel sequencer PC speaker sound.
+* `SOUND=direct` — older small direct PC speaker backend.
+* `SOUND=dos` — original DOS Digger sound logic using the direct PC speaker backend.
+* `SOUND=none` — build without sound.
+* `TITLEBMP=1/0` — include/omit title bitmap.
 
-```sh
-make SOUND=0
-make SOUND=direct
-make TITLEBMP=0
-```
+Run `make clean` when switching options.
+
 
 ## Running
 
@@ -58,7 +61,7 @@ Copy the built game and its runtime files to your ELKS environment, then run:
 digger
 ```
 
-Keep `digtitle.bmp` next to the binary if you want the title screen.
+Keep `digtitle.bmp` in `/lib` folder.
 
 ## Input mapping
 
@@ -72,7 +75,6 @@ p / P            -> pause
 q / Q            -> quit
 Esc              -> quit
 Ctrl-C           -> quit in raw mode
-n / N            -> preserved for title-screen player-count toggle
 ```
 
 ## Credits

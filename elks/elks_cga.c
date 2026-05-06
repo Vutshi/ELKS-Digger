@@ -21,6 +21,10 @@
 #include <stdio.h>
 #endif
 
+#ifdef DIGGER_ELKS
+void elks_input_suspend_raw_keyboard(void);
+#endif
+
 #define CGA_SEGMENT     0xB800u
 #define CGA_BYTES       0x4000u
 #define CGA_NEXT_FIELD  0x2000u
@@ -679,6 +683,14 @@ void cgatitle(void)
 #ifdef DIGGER_CGA_PROFILE
 void elks_dump_profile(void)
 {
+#ifdef DIGGER_ELKS
+  /* DCSET_KRAW requires the console graphics lock, which also suppresses
+   * normal tty output.  Release only the raw-scancode/console lock here while
+   * keeping termios raw, so the profile text can print and getkey() still
+   * accepts one key without Enter.
+   */
+  elks_input_suspend_raw_keyboard();
+#endif
   printf("\n:\n");
   printf(" i:%u %u %u %u %u %u %u\n",
          elks_input_read_count, elks_input_queued_count,
