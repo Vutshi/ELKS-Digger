@@ -431,14 +431,10 @@ static void seq_refill_music(void)
     if ((unsigned int)ret > count)
       ret = (int)count;
 
-    if ((unsigned short)ret == count) {
-      seq_music = tmp;
-      seq_refill_wait = SEQ_REFILL_WAIT_FULL;
-    }
-    else {
-      seq_advance_music((unsigned short)ret);
-      seq_refill_wait = SEQ_REFILL_WAIT_PARTIAL;
-    }
+    seq_advance_music((unsigned short)ret);
+    seq_refill_wait = ((unsigned short)ret == count) ?
+                      SEQ_REFILL_WAIT_FULL :
+                      SEQ_REFILL_WAIT_PARTIAL;
     seq_kernel_active = 1;
   }
   else {
