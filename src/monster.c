@@ -509,7 +509,8 @@ void mondie(Sint4 mon)
 }
 
 #ifdef DIGGER_ELKS
-#define MONFIELDIDX(h,v) (((v)<<4)-(v)+(h))
+static const Sint4 monfieldrow[MHEIGHT]={0,15,30,45,60,75,90,105,120,135};
+#define MONFIELDIDX(h,v) (monfieldrow[(v)]+(h))
 
 bool fieldclear(Sint4 dir,Sint4 x,Sint4 y)
 {
