@@ -44,14 +44,13 @@ Sint4 nmononscr(void);
 
 void initmonsters(void)
 {
-  Sint4 i,lev10;
-  lev10=levof10();
+  Sint4 i;
   for (i=0;i<MONSTERS;i++)
     mondat[i].flag=FALSE;
   nextmonster=0;
-  mongaptime=45-(lev10<<1);
-  totalmonsters=lev10+5;
-  switch (lev10) {
+  mongaptime=45-(levof10()<<1);
+  totalmonsters=levof10()+5;
+  switch (levof10()) {
     case 1:
       maxmononscr=3;
       break;
@@ -158,54 +157,49 @@ void mongold(void)
 
 void monai(Sint4 mon)
 {
-  struct monster *mp;
   Sint4 monox,monoy,dir,mdirp1,mdirp2,mdirp3,mdirp4,t;
-  Sint4 mh,mv,mxr,myr,digx,digy,lev10;
+  Sint4 mh,mv,mxr,myr;
   Sint3 clcoll[SPRITES],clfirst[TYPES];
   int i,m,dig;
   bool push;
 #ifdef DIGGER_CGA_PROFILE
   elks_monai_count++;
 #endif
-  mp=&mondat[mon];
-  monox=mp->x;
-  monoy=mp->y;
-  mh=mp->h;
-  mv=mp->v;
-  mxr=mp->xr;
-  myr=mp->yr;
-  if (mp->xr==0 && mp->yr==0) {
-    lev10=levof10();
+  monox=mondat[mon].x;
+  monoy=mondat[mon].y;
+  mh=mondat[mon].h;
+  mv=mondat[mon].v;
+  mxr=mondat[mon].xr;
+  myr=mondat[mon].yr;
+  if (mondat[mon].xr==0 && mondat[mon].yr==0) {
 
     /* If we are here the monster needs to know which way to turn next. */
 
     /* Turn hobbin back into nobbin if it's had its time */
 
-    if (mp->hnt>30+(lev10<<1))
-      if (!mp->nob) {
-        mp->hnt=0;
-        mp->nob=TRUE;
+    if (mondat[mon].hnt>30+(levof10()<<1))
+      if (!mondat[mon].nob) {
+        mondat[mon].hnt=0;
+        mondat[mon].nob=TRUE;
       }
 
     /* Set up monster direction properties to chase Digger */
 
-    dig=mp->chase;
+    dig=mondat[mon].chase;
     if (!digalive(dig))
       dig=(diggers-1)-dig;
-    digx=diggerx(dig);
-    digy=diggery(dig);
 
-    if (abs(digy-mp->y)>abs(digx-mp->x)) {
-      if (digy<mp->y) { mdirp1=DIR_UP;    mdirp4=DIR_DOWN; }
-                  else { mdirp1=DIR_DOWN;  mdirp4=DIR_UP; }
-      if (digx<mp->x) { mdirp2=DIR_LEFT;  mdirp3=DIR_RIGHT; }
-                  else { mdirp2=DIR_RIGHT; mdirp3=DIR_LEFT; }
+    if (abs(diggery(dig)-mondat[mon].y)>abs(diggerx(dig)-mondat[mon].x)) {
+      if (diggery(dig)<mondat[mon].y) { mdirp1=DIR_UP;    mdirp4=DIR_DOWN; }
+                                 else { mdirp1=DIR_DOWN;  mdirp4=DIR_UP; }
+      if (diggerx(dig)<mondat[mon].x) { mdirp2=DIR_LEFT;  mdirp3=DIR_RIGHT; }
+                                 else { mdirp2=DIR_RIGHT; mdirp3=DIR_LEFT; }
     }
     else {
-      if (digx<mp->x) { mdirp1=DIR_LEFT;  mdirp4=DIR_RIGHT; }
-                  else { mdirp1=DIR_RIGHT; mdirp4=DIR_LEFT; }
-      if (digy<mp->y) { mdirp2=DIR_UP;    mdirp3=DIR_DOWN; }
-                  else { mdirp2=DIR_DOWN;  mdirp3=DIR_UP; }
+      if (diggerx(dig)<mondat[mon].x) { mdirp1=DIR_LEFT;  mdirp4=DIR_RIGHT; }
+                                 else { mdirp1=DIR_RIGHT; mdirp4=DIR_LEFT; }
+      if (diggery(dig)<mondat[mon].y) { mdirp2=DIR_UP;    mdirp3=DIR_DOWN; }
+                                 else { mdirp2=DIR_DOWN;  mdirp3=DIR_UP; }
     }
 
     /* In bonus mode, run away from Digger */
@@ -218,7 +212,7 @@ void monai(Sint4 mon)
     /* Adjust priorities so that monsters don't reverse direction unless they
        really have to */
 
-    dir=reversedir(mp->dir);
+    dir=reversedir(mondat[mon].dir);
     if (dir==mdirp1) {
       mdirp1=mdirp2;
       mdirp2=mdirp3;
@@ -237,8 +231,8 @@ void monai(Sint4 mon)
 
     /* Introduce a random element on levels <6 : occasionally swap p1 and p3 */
 
-    if (randno(lev10+5)==1) /* Need to split for determinism */
-      if (lev10<6) {
+    if (randno(levof10()+5)==1) /* Need to split for determinism */
+      if (levof10()<6) {
         t=mdirp1;
         mdirp1=mdirp3;
         mdirp3=t;
@@ -246,64 +240,64 @@ void monai(Sint4 mon)
 
     /* Check field and find direction */
 
-    if (fieldclear(mdirp1,mp->h,mp->v))
+    if (fieldclear(mdirp1,mondat[mon].h,mondat[mon].v))
       dir=mdirp1;
     else
-      if (fieldclear(mdirp2,mp->h,mp->v))
+      if (fieldclear(mdirp2,mondat[mon].h,mondat[mon].v))
         dir=mdirp2;
       else
-        if (fieldclear(mdirp3,mp->h,mp->v))
+        if (fieldclear(mdirp3,mondat[mon].h,mondat[mon].v))
           dir=mdirp3;
         else
-          if (fieldclear(mdirp4,mp->h,mp->v))
+          if (fieldclear(mdirp4,mondat[mon].h,mondat[mon].v))
             dir=mdirp4;
 
     /* Hobbins don't care about the field: they go where they want. */
 
-    if (!mp->nob)
+    if (!mondat[mon].nob)
       dir=mdirp1;
 
     /* Monsters take a time penalty for changing direction */
 
-    if (mp->dir!=dir)
-      mp->t++;
+    if (mondat[mon].dir!=dir)
+      mondat[mon].t++;
 
     /* Save the new direction */
 
-    mp->dir=dir;
+    mondat[mon].dir=dir;
   }
 
   /* If monster is about to go off edge of screen, stop it. */
 
-  if ((mp->x==292 && mp->dir==DIR_RIGHT) ||
-      (mp->x==12 && mp->dir==DIR_LEFT) ||
-      (mp->y==180 && mp->dir==DIR_DOWN) ||
-      (mp->y==18 && mp->dir==DIR_UP))
-    mp->dir=DIR_NONE;
+  if ((mondat[mon].x==292 && mondat[mon].dir==DIR_RIGHT) ||
+      (mondat[mon].x==12 && mondat[mon].dir==DIR_LEFT) ||
+      (mondat[mon].y==180 && mondat[mon].dir==DIR_DOWN) ||
+      (mondat[mon].y==18 && mondat[mon].dir==DIR_UP))
+    mondat[mon].dir=DIR_NONE;
 
   /* Change hdir for hobbin */
 
-  if (mp->dir==DIR_LEFT || mp->dir==DIR_RIGHT)
-    mp->hdir=mp->dir;
+  if (mondat[mon].dir==DIR_LEFT || mondat[mon].dir==DIR_RIGHT)
+    mondat[mon].hdir=mondat[mon].dir;
 
   /* Hobbins dig */
 
-  if (!mp->nob) {
+  if (!mondat[mon].nob) {
     MONPROF_INC(elks_prof_hobbin_dig_calls);
 #ifdef DIGGER_ELKS
-    eatfieldgrid(mh,mxr,mv,myr,mp->dir);
+    eatfieldgrid(mh,mxr,mv,myr,mondat[mon].dir);
 #else
-    eatfield(mp->x,mp->y,mp->dir);
+    eatfield(mondat[mon].x,mondat[mon].y,mondat[mon].dir);
 #endif
   }
 
   /* (Draw new tunnels) and move monster */
 
-  switch (mp->dir) {
+  switch (mondat[mon].dir) {
     case DIR_RIGHT:
-      if (!mp->nob)
-        drawrightblob(mp->x,mp->y);
-      mp->x+=4;
+      if (!mondat[mon].nob)
+        drawrightblob(mondat[mon].x,mondat[mon].y);
+      mondat[mon].x+=4;
       mxr+=4;
       if (mxr==20) {
         mxr=0;
@@ -311,9 +305,9 @@ void monai(Sint4 mon)
       }
       break;
     case DIR_UP:
-      if (!mp->nob)
-        drawtopblob(mp->x,mp->y);
-      mp->y-=3;
+      if (!mondat[mon].nob)
+        drawtopblob(mondat[mon].x,mondat[mon].y);
+      mondat[mon].y-=3;
       if (myr==0) {
         myr=15;
         mv--;
@@ -322,9 +316,9 @@ void monai(Sint4 mon)
         myr-=3;
       break;
     case DIR_LEFT:
-      if (!mp->nob)
-        drawleftblob(mp->x,mp->y);
-      mp->x-=4;
+      if (!mondat[mon].nob)
+        drawleftblob(mondat[mon].x,mondat[mon].y);
+      mondat[mon].x-=4;
       if (mxr==0) {
         mxr=16;
         mh--;
@@ -333,9 +327,9 @@ void monai(Sint4 mon)
         mxr-=4;
       break;
     case DIR_DOWN:
-      if (!mp->nob)
-        drawbottomblob(mp->x,mp->y);
-      mp->y+=3;
+      if (!mondat[mon].nob)
+        drawbottomblob(mondat[mon].x,mondat[mon].y);
+      mondat[mon].y+=3;
       myr+=3;
       if (myr==18) {
         myr=0;
@@ -346,54 +340,54 @@ void monai(Sint4 mon)
 
   /* Hobbins can eat emeralds */
 
-  if (!mp->nob)
-    hitemerald(mh,mv,mxr,myr,mp->dir);
+  if (!mondat[mon].nob)
+    hitemerald(mh,mv,mxr,myr,mondat[mon].dir);
 
   /* If Digger's gone, don't bother */
 
   if (!isalive()) {
-    mp->x=monox;
-    mp->y=monoy;
-    mh=mp->h;
-    mv=mp->v;
-    mxr=mp->xr;
-    myr=mp->yr;
+    mondat[mon].x=monox;
+    mondat[mon].y=monoy;
+    mh=mondat[mon].h;
+    mv=mondat[mon].v;
+    mxr=mondat[mon].xr;
+    myr=mondat[mon].yr;
   }
 
   /* If monster's just started, don't move yet */
 
-  if (mp->stime!=0) {
-    mp->stime--;
-    mp->x=monox;
-    mp->y=monoy;
-    mh=mp->h;
-    mv=mp->v;
-    mxr=mp->xr;
-    myr=mp->yr;
+  if (mondat[mon].stime!=0) {
+    mondat[mon].stime--;
+    mondat[mon].x=monox;
+    mondat[mon].y=monoy;
+    mh=mondat[mon].h;
+    mv=mondat[mon].v;
+    mxr=mondat[mon].xr;
+    myr=mondat[mon].yr;
   }
 
   /* Increase time counter for hobbin */
 
-  if (!mp->nob && mp->hnt<100)
-    mp->hnt++;
+  if (!mondat[mon].nob && mondat[mon].hnt<100)
+    mondat[mon].hnt++;
 
   /* Draw monster */
 
   push=TRUE;
-  drawmon(mon,mp->nob,mp->hdir,mp->x,mp->y);
+  drawmon(mon,mondat[mon].nob,mondat[mon].hdir,mondat[mon].x,mondat[mon].y);
   snapshotcollisions(clfirst,clcoll);
   incpenalty();
 
   /* Collision with another monster */
 
   if (clfirst[2]!=-1) {
-    mp->t++; /* Time penalty */
+    mondat[mon].t++; /* Time penalty */
     /* Ensure both aren't moving in the same dir. */
     i=clfirst[2];
     do {
       m=i-FIRSTMONSTER;
-      if (mp->dir==mondat[m].dir && mondat[m].stime==0 &&
-          mp->stime==0)
+      if (mondat[mon].dir==mondat[m].dir && mondat[m].stime==0 &&
+          mondat[mon].stime==0)
         mondat[m].dir=reversedir(mondat[m].dir);
       /* The kludge here is to preserve playback for a bug in previous
          versions. */
@@ -412,42 +406,42 @@ void monai(Sint4 mon)
   /* Check for collision with bag */
 
   if (clfirst[1]!=-1) {
-    mp->t++; /* Time penalty */
+    mondat[mon].t++; /* Time penalty */
     mongotgold=FALSE;
-    if (mp->dir==DIR_RIGHT || mp->dir==DIR_LEFT) {
-      push=pushbags(mp->dir,clfirst,clcoll);      /* Horizontal push */
-      mp->t++; /* Time penalty */
+    if (mondat[mon].dir==DIR_RIGHT || mondat[mon].dir==DIR_LEFT) {
+      push=pushbags(mondat[mon].dir,clfirst,clcoll);      /* Horizontal push */
+      mondat[mon].t++; /* Time penalty */
     }
     else
       if (!pushudbags(clfirst,clcoll)) /* Vertical push */
         push=FALSE;
     if (mongotgold) /* No time penalty if monster eats gold */
-      mp->t=0;
-    if (!mp->nob && mp->hnt>1)
+      mondat[mon].t=0;
+    if (!mondat[mon].nob && mondat[mon].hnt>1)
       removebags(clfirst,clcoll); /* Hobbins eat bags */
   }
 
   /* Increase hobbin cross counter */
 
-  if (mp->nob && clfirst[2]!=-1 && isalive())
-    mp->hnt++;
+  if (mondat[mon].nob && clfirst[2]!=-1 && isalive())
+    mondat[mon].hnt++;
 
   /* See if bags push monster back */
 
   if (!push) {
-    mp->x=monox;
-    mp->y=monoy;
-    mh=mp->h;
-    mv=mp->v;
-    mxr=mp->xr;
-    myr=mp->yr;
-    drawmon(mon,mp->nob,mp->hdir,mp->x,mp->y);
+    mondat[mon].x=monox;
+    mondat[mon].y=monoy;
+    mh=mondat[mon].h;
+    mv=mondat[mon].v;
+    mxr=mondat[mon].xr;
+    myr=mondat[mon].yr;
+    drawmon(mon,mondat[mon].nob,mondat[mon].hdir,mondat[mon].x,mondat[mon].y);
     incpenalty();
-    if (mp->nob) /* The other way to create hobbin: stuck on h-bag */
-      mp->hnt++;
-    if ((mp->dir==DIR_UP || mp->dir==DIR_DOWN) &&
-        mp->nob)
-      mp->dir=reversedir(mp->dir); /* If vertical, give up */
+    if (mondat[mon].nob) /* The other way to create hobbin: stuck on h-bag */
+      mondat[mon].hnt++;
+    if ((mondat[mon].dir==DIR_UP || mondat[mon].dir==DIR_DOWN) &&
+        mondat[mon].nob)
+      mondat[mon].dir=reversedir(mondat[mon].dir); /* If vertical, give up */
   }
 
   /* Collision with Digger */
@@ -475,10 +469,10 @@ void monai(Sint4 mon)
 
   /* Update co-ordinates */
 
-  mp->h=mh;
-  mp->v=mv;
-  mp->xr=mxr;
-  mp->yr=myr;
+  mondat[mon].h=mh;
+  mondat[mon].v=mv;
+  mondat[mon].xr=mxr;
+  mondat[mon].yr=myr;
 }
 
 void mondie(Sint4 mon)
