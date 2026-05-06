@@ -5,21 +5,36 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-/* ELKS terminal keyboard backend for the Digger CGA-only port.
+/* ELKS keyboard backend for the Digger CGA-only port.
  *
- * ELKS console input gives bytes, not PC keyboard make/break events.  The
- * original Digger input code expects held directions to remain visible through
- * leftpressed/rightpressed/uppressed/downpressed until a break code arrives.
- * This backend therefore keeps a tiny synthetic key state and releases held
- * keys after typematic repeats stop for a few input service ticks.
+ * Default backend: ELKS console raw-scancode mode.  IRQ1 delivers PC set-1
+ * make/break bytes to the tty queue before ASCII/ANSI translation, so Digger
+ * maintains real key state and does not depend on typematic repeat timing.
+ *
+ * Compatibility backend: byte-oriented terminal input selected with
+ * KEYBOARD=term in elks/Makefile.  This is the older path: arrows arrive as
+ * ANSI escape sequences and key release is synthesized from repeat aging.
  */
+
+#if defined(DIGGER_ELKS_KBD_KRAW) && defined(DIGGER_ELKS_KBD_TERM)
+#error Select only one ELKS keyboard backend
+#endif
+#if !defined(DIGGER_ELKS_KBD_KRAW) && !defined(DIGGER_ELKS_KBD_TERM)
+#define DIGGER_ELKS_KBD_KRAW 1
+#endif
 
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/select.h>
+#ifdef DIGGER_ELKS_KBD_KRAW
+#include <sys/ioctl.h>
+#endif
 #include <termios.h>
 #include <errno.h>
+#ifdef DIGGER_ELKS_KBD_KRAW
+#include <linuxmt/ntty.h>
+#endif
 #include "def.h"
 #include "hardware.h"
 
@@ -32,23 +47,9 @@
 #define KEY_EXIT     324
 #define KEY_PAUSE    32
 
-/* checkkeyb() is normally called twice in the current ELKS frame path
- * (before and after the short sleep).  Eight service ticks gives roughly a
- * 3-6 rendered-frame release delay while still stopping promptly after keyup.
- */
-#define ELKS_HOLD_TIMEOUT      8
-#define ELKS_ONESHOT_TIMEOUT   8
-
 /* Power-of-two queue length so wraparound is a cheap mask, not modulo. */
 #define ELKS_KEYQ_LEN          8
 #define ELKS_KEYQ_MASK         (ELKS_KEYQ_LEN - 1)
-
-/* Do not let typematic repeat backlog become unbounded hot-path work.
- * checkkeyb() calls elks_input_service() before consuming queued keys; cap
- * the OS-byte drain there so one slow frame cannot make the next frame drain
- * a large terminal repeat backlog.
- */
-#define ELKS_INPUT_SERVICE_DRAIN_MAX 8
 
 extern bool leftpressed, rightpressed, uppressed, downpressed, f1pressed;
 extern bool left2pressed, right2pressed, up2pressed, down2pressed, f12pressed;
@@ -59,17 +60,12 @@ static bool termios_saved;
 static bool keyboard_active;
 static bool cleanup_installed;
 static bool cleanup_running;
+static bool service_poll_active;
+static bool text_input_mode;
 
 static Sint4 keyq[ELKS_KEYQ_LEN];
 static unsigned char keyq_head;
 static unsigned char keyq_tail;
-
-static unsigned char age_left, age_right, age_up, age_down, age_fire;
-static unsigned char age_left2, age_right2, age_up2, age_down2, age_fire2;
-static unsigned char age_pause, age_exit;
-static bool pause_down, exit_down;
-static bool service_poll_active;
-static bool text_input_mode;
 
 #ifdef DIGGER_CGA_PROFILE
 unsigned int elks_input_read_count;
@@ -159,6 +155,481 @@ static int wait_byte(unsigned char *ch)
 
   return read_byte_now(ch);
 }
+
+static void clear_digger_keys(void)
+{
+  leftpressed = rightpressed = uppressed = downpressed = f1pressed = FALSE;
+  left2pressed = right2pressed = up2pressed = down2pressed = f12pressed = FALSE;
+}
+
+static void cleanup_terminal_and_video(void)
+{
+  if (cleanup_running)
+    return;
+  cleanup_running = TRUE;
+  restorekeyb();
+  graphicsoff();
+  cleanup_running = FALSE;
+}
+
+static void signal_cleanup(int sig)
+{
+  cleanup_terminal_and_video();
+  exit(128 + sig);
+}
+
+static void install_cleanup(void)
+{
+  if (cleanup_installed)
+    return;
+  cleanup_installed = TRUE;
+  atexit(cleanup_terminal_and_video);
+#ifdef SIGINT
+  signal(SIGINT, signal_cleanup);
+#endif
+#ifdef SIGTERM
+  signal(SIGTERM, signal_cleanup);
+#endif
+#ifdef SIGHUP
+  signal(SIGHUP, signal_cleanup);
+#endif
+#ifdef SIGQUIT
+  signal(SIGQUIT, signal_cleanup);
+#endif
+}
+
+static bool setup_terminal_raw(void)
+{
+  struct termios raw;
+
+  if (tcgetattr(0, &saved_termios) != 0)
+    return FALSE;
+
+  termios_saved = TRUE;
+  raw = saved_termios;
+  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  raw.c_iflag &= ~(ICRNL | INPCK | ISTRIP | IXON | BRKINT);
+  raw.c_cflag |= CS8;
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 0;
+
+  if (tcsetattr(0, TCSAFLUSH, &raw) != 0)
+    return FALSE;
+
+  keyboard_active = TRUE;
+  return TRUE;
+}
+
+#ifdef DIGGER_ELKS_KBD_KRAW
+
+/* Set-1 scan code state.  A byte table is faster than a packed bitmap on 8086. */
+#define ELKS_RAW_SCANCODE_MAX 128
+#define ELKS_RAW_READ_CHUNK   16
+
+static bool raw_keyboard_active;
+static bool raw_graph_locked;
+static bool raw_text_suspended;
+static unsigned char raw_down[ELKS_RAW_SCANCODE_MAX];
+static unsigned char raw_ctrl_down;
+
+static void raw_clear_state(void)
+{
+  unsigned char i;
+
+  for (i = 0; i < ELKS_RAW_SCANCODE_MAX; i++)
+    raw_down[i] = 0;
+  raw_ctrl_down = 0;
+}
+
+static void raw_set_digger_flag(int index, bool pressed)
+{
+  switch (index) {
+    case 0: rightpressed = pressed; break;
+    case 1: uppressed = pressed; break;
+    case 2: leftpressed = pressed; break;
+    case 3: downpressed = pressed; break;
+    case 4: f1pressed = pressed; break;
+    case 5: right2pressed = pressed; break;
+    case 6: up2pressed = pressed; break;
+    case 7: left2pressed = pressed; break;
+    case 8: down2pressed = pressed; break;
+    case 9: f12pressed = pressed; break;
+  }
+}
+
+static void raw_apply_index(int index, bool pressed, Sint4 queued_key)
+{
+  bool was_down = FALSE;
+
+  switch (index) {
+    case 0: was_down = rightpressed; break;
+    case 1: was_down = uppressed; break;
+    case 2: was_down = leftpressed; break;
+    case 3: was_down = downpressed; break;
+    case 4: was_down = f1pressed; break;
+    case 5: was_down = right2pressed; break;
+    case 6: was_down = up2pressed; break;
+    case 7: was_down = left2pressed; break;
+    case 8: was_down = down2pressed; break;
+    case 9: was_down = f12pressed; break;
+  }
+
+  raw_set_digger_flag(index, pressed);
+  if (pressed && !was_down)
+    queue_key(queued_key);
+}
+
+static bool raw_apply_configured_scancode(unsigned char code, bool pressed)
+{
+  int i;
+
+  for (i = 0; i < 10; i++) {
+    if (code == (unsigned char)(keycodes[i][0] & 0x7f)) {
+      raw_apply_index(i, pressed, (Sint4)keycodes[i][2]);
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static void raw_emit_ascii_make(unsigned char ch)
+{
+  if (ch == 'q' || ch == 'Q') {
+    queue_key(KEY_EXIT);
+    return;
+  }
+  if (ch == 'p' || ch == 'P') {
+    queue_key(KEY_PAUSE);
+    return;
+  }
+  queue_key((Sint4)ch);
+}
+
+static void handle_raw_scancode(unsigned char b)
+{
+  unsigned char code;
+  bool pressed;
+  bool was_raw_down;
+
+  if (b == 0xe0)
+    return;
+
+  pressed = ((b & 0x80) == 0);
+  code = (unsigned char)(b & 0x7f);
+
+  was_raw_down = raw_down[code] != 0;
+  raw_down[code] = pressed ? 1 : 0;
+
+  if (code == 0x1d)                 /* Ctrl */
+    raw_ctrl_down = pressed ? 1 : 0;
+
+  /* Fast default aliases for the ELKS port.  These intentionally mirror the
+   * terminal compatibility backend: arrows or WASD move player 1, Space fires.
+   */
+  switch (code) {
+    case 0x48: raw_apply_index(1, pressed, KEY_P1_UP);    return; /* Up */
+    case 0x50: raw_apply_index(3, pressed, KEY_P1_DOWN);  return; /* Down */
+    case 0x4b: raw_apply_index(2, pressed, KEY_P1_LEFT);  return; /* Left */
+    case 0x4d: raw_apply_index(0, pressed, KEY_P1_RIGHT); return; /* Right */
+    case 0x11: raw_apply_index(1, pressed, KEY_P1_UP);    return; /* W */
+    case 0x1f: raw_apply_index(3, pressed, KEY_P1_DOWN);  return; /* S */
+    case 0x1e: raw_apply_index(2, pressed, KEY_P1_LEFT);  return; /* A */
+    case 0x20: raw_apply_index(0, pressed, KEY_P1_RIGHT); return; /* D */
+    case 0x39: raw_apply_index(4, pressed, KEY_P1_FIRE);  return; /* Space */
+    case 0x0f: raw_apply_index(9, pressed, KEY_P2_FIRE);  return; /* Tab */
+  }
+
+  /* Let user-redefined non-default scan-code bindings work, including releases. */
+  if (raw_apply_configured_scancode(code, pressed))
+    return;
+
+  if (!pressed || was_raw_down)
+    return;
+
+  switch (code) {
+    case 0x01: queue_key(KEY_EXIT); return;      /* Esc */
+    case 0x10: raw_emit_ascii_make('q'); return;
+    case 0x19: raw_emit_ascii_make('p'); return;
+    case 0x31: raw_emit_ascii_make('n'); return;
+    case 0x2e:                                  /* C */
+      if (raw_ctrl_down)
+        queue_key(KEY_EXIT);
+      else
+        raw_emit_ascii_make('c');
+      return;
+    default:
+      /* Any other make can unblock pause/title waits without pretending to be
+       * printable text.
+       */
+      queue_key((Sint4)code);
+      return;
+  }
+}
+
+static void drain_raw_input_all(void)
+{
+  unsigned char buf[ELKS_RAW_READ_CHUNK];
+  int r, i;
+
+  do {
+    do {
+      r = read(0, buf, sizeof(buf));
+    } while (r < 0 && errno == EINTR);
+
+    if (r <= 0)
+      return;
+
+#ifdef DIGGER_CGA_PROFILE
+    elks_input_read_count += (unsigned int)r;
+#endif
+    for (i = 0; i < r; i++)
+      handle_raw_scancode(buf[i]);
+  } while (r == sizeof(buf));
+}
+
+static bool enable_raw_keyboard(void)
+{
+  bool got_graph_here = FALSE;
+
+  if (raw_keyboard_active)
+    return TRUE;
+  if (!keyboard_active)
+    return FALSE;
+
+  if (!raw_graph_locked) {
+    if (ioctl(0, DCGET_GRAPH, 0) < 0)
+      return FALSE;
+    raw_graph_locked = TRUE;
+    got_graph_here = TRUE;
+  }
+
+  if (ioctl(0, DCSET_KRAW, 0) < 0) {
+    if (got_graph_here) {
+      (void)ioctl(0, DCREL_GRAPH, 0);
+      raw_graph_locked = FALSE;
+    }
+    return FALSE;
+  }
+
+  raw_clear_state();
+  raw_keyboard_active = TRUE;
+  return TRUE;
+}
+
+static void disable_raw_keyboard(void)
+{
+  if (raw_keyboard_active) {
+    (void)ioctl(0, DCREL_KRAW, 0);
+    raw_keyboard_active = FALSE;
+  }
+  raw_clear_state();
+}
+
+void elks_input_suspend_raw_keyboard(void)
+{
+  disable_raw_keyboard();
+  if (raw_graph_locked) {
+    (void)ioctl(0, DCREL_GRAPH, 0);
+    raw_graph_locked = FALSE;
+  }
+}
+
+static void decode_text_escape(void)
+{
+  unsigned char a, b;
+
+  /* In text-entry mode, cursor-key escape sequences must not become
+   * movement events or printable initials.  Drain the common ANSI form and
+   * ignore it.
+   */
+  if (!read_byte_now(&a))
+    return;
+
+  if (a == '[' || a == 'O') {
+    read_byte_now(&b);
+    return;
+  }
+}
+
+static void handle_text_byte(unsigned char ch)
+{
+  if (ch == 0x1b) {
+    decode_text_escape();
+    return;
+  }
+
+  if (ch == 8 || ch == 127 || (ch >= 32 && ch <= 126))
+    queue_key((Sint4)ch);
+}
+
+static void drain_text_input_limited(unsigned char maxbytes)
+{
+  unsigned char ch;
+
+  while (maxbytes != 0 && read_byte_now(&ch)) {
+    handle_text_byte(ch);
+    maxbytes--;
+  }
+}
+
+static void drain_text_input_all(void)
+{
+  unsigned char ch;
+
+  while (read_byte_now(&ch))
+    handle_text_byte(ch);
+}
+
+void elks_input_service(void)
+{
+  if (raw_keyboard_active)
+    drain_raw_input_all();
+  else if (text_input_mode)
+    drain_text_input_limited(8);
+  service_poll_active = TRUE;
+}
+
+void elks_input_set_text_mode(bool enabled)
+{
+  if (enabled) {
+    raw_text_suspended = raw_keyboard_active;
+    if (raw_text_suspended)
+      disable_raw_keyboard();
+    text_input_mode = TRUE;
+    return;
+  }
+
+  text_input_mode = FALSE;
+  if (raw_text_suspended) {
+    raw_text_suspended = FALSE;
+    (void)enable_raw_keyboard();
+  }
+}
+
+void elks_input_reset(void)
+{
+#ifdef DIGGER_CGA_PROFILE
+  elks_input_reset_count++;
+#endif
+  service_poll_active = FALSE;
+  queue_clear();
+  clear_digger_keys();
+  raw_clear_state();
+}
+
+void elks_input_flush_pending(void)
+{
+  unsigned char ch;
+
+  elks_input_reset();
+
+  if (!keyboard_active)
+    return;
+
+  if (raw_keyboard_active) {
+    drain_raw_input_all();
+  }
+  else {
+    while (read_byte_now(&ch)) {
+#ifdef DIGGER_CGA_PROFILE
+      elks_input_discard_count++;
+#endif
+    }
+  }
+
+  elks_input_reset();
+}
+
+void initkeyb(void)
+{
+  install_cleanup();
+  elks_input_reset();
+
+  if (setup_terminal_raw())
+    (void)enable_raw_keyboard();
+}
+
+void restorekeyb(void)
+{
+  disable_raw_keyboard();
+  if (raw_graph_locked) {
+    (void)ioctl(0, DCREL_GRAPH, 0);
+    raw_graph_locked = FALSE;
+  }
+  raw_text_suspended = FALSE;
+  text_input_mode = FALSE;
+
+  if (keyboard_active && termios_saved)
+    tcsetattr(0, TCSANOW, &saved_termios);
+  keyboard_active = FALSE;
+  elks_input_reset();
+}
+
+bool kbhit(void)
+{
+  if (!queue_empty())
+    return TRUE;
+
+  if (service_poll_active) {
+    service_poll_active = FALSE;
+    return FALSE;
+  }
+
+  if (raw_keyboard_active)
+    drain_raw_input_all();
+  else
+    drain_text_input_all();
+  return !queue_empty();
+}
+
+Sint4 getkey(void)
+{
+  Sint4 key;
+  unsigned char ch;
+
+  service_poll_active = FALSE;
+
+  if (dequeue_key(&key))
+    return key;
+
+  do {
+    if (!wait_byte(&ch))
+      return 0;
+    if (raw_keyboard_active) {
+      handle_raw_scancode(ch);
+      drain_raw_input_all();
+    }
+    else {
+      handle_text_byte(ch);
+      drain_text_input_all();
+    }
+  } while (!dequeue_key(&key));
+
+  return key;
+}
+
+#endif /* DIGGER_ELKS_KBD_KRAW */
+
+#ifdef DIGGER_ELKS_KBD_TERM
+
+/* checkkeyb() is normally called twice in the current ELKS frame path
+ * (before and after the short sleep).  Eight service ticks gives roughly a
+ * 3-6 rendered-frame release delay while still stopping promptly after keyup.
+ */
+#define ELKS_HOLD_TIMEOUT      8
+#define ELKS_ONESHOT_TIMEOUT   8
+
+/* Do not let typematic repeat backlog become unbounded hot-path work.
+ * checkkeyb() calls elks_input_service() before consuming queued keys; cap
+ * the OS-byte drain there so one slow frame cannot make the next frame drain
+ * a large terminal repeat backlog.
+ */
+#define ELKS_INPUT_SERVICE_DRAIN_MAX 8
+
+static unsigned char age_left, age_right, age_up, age_down, age_fire;
+static unsigned char age_left2, age_right2, age_up2, age_down2, age_fire2;
+static unsigned char age_pause, age_exit;
+static bool pause_down, exit_down;
 
 static bool set_held(int index)
 {
@@ -410,6 +881,10 @@ static void drain_input_all(void)
     handle_byte(ch);
 }
 
+void elks_input_suspend_raw_keyboard(void)
+{
+}
+
 void elks_input_service(void)
 {
   drain_input_limited(ELKS_INPUT_SERVICE_DRAIN_MAX);
@@ -429,9 +904,7 @@ void elks_input_reset(void)
 #endif
   service_poll_active = FALSE;
   queue_clear();
-
-  leftpressed = rightpressed = uppressed = downpressed = f1pressed = FALSE;
-  left2pressed = right2pressed = up2pressed = down2pressed = f12pressed = FALSE;
+  clear_digger_keys();
 
   age_left = age_right = age_up = age_down = age_fire = 0;
   age_left2 = age_right2 = age_up2 = age_down2 = age_fire2 = 0;
@@ -445,10 +918,6 @@ void elks_input_flush_pending(void)
 
   elks_input_reset();
 
-  /* Only raw/nonblocking mode is safe to drain here.  initkeyb() deliberately
-   * uses elks_input_reset(), not this function, before terminal raw mode is
-   * installed.
-   */
   if (!keyboard_active)
     return;
 
@@ -461,64 +930,17 @@ void elks_input_flush_pending(void)
   elks_input_reset();
 }
 
-static void cleanup_terminal_and_video(void)
-{
-  if (cleanup_running)
-    return;
-  cleanup_running = TRUE;
-  restorekeyb();
-  graphicsoff();
-  cleanup_running = FALSE;
-}
-
-static void signal_cleanup(int sig)
-{
-  cleanup_terminal_and_video();
-  exit(128 + sig);
-}
-
-static void install_cleanup(void)
-{
-  if (cleanup_installed)
-    return;
-  cleanup_installed = TRUE;
-  atexit(cleanup_terminal_and_video);
-#ifdef SIGINT
-  signal(SIGINT, signal_cleanup);
-#endif
-#ifdef SIGTERM
-  signal(SIGTERM, signal_cleanup);
-#endif
-#ifdef SIGHUP
-  signal(SIGHUP, signal_cleanup);
-#endif
-#ifdef SIGQUIT
-  signal(SIGQUIT, signal_cleanup);
-#endif
-}
-
 void initkeyb(void)
 {
-  struct termios raw;
-
   install_cleanup();
   elks_input_reset();
-
-  if (tcgetattr(0, &saved_termios) == 0) {
-    termios_saved = TRUE;
-    raw = saved_termios;
-    raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
-    raw.c_iflag &= ~(ICRNL | INPCK | ISTRIP | IXON | BRKINT);
-    raw.c_cflag |= CS8;
-    raw.c_cc[VMIN] = 0;
-    raw.c_cc[VTIME] = 0;
-    if (tcsetattr(0, TCSAFLUSH, &raw) == 0)
-      keyboard_active = TRUE;
-  }
+  (void)setup_terminal_raw();
 }
 
 void restorekeyb(void)
 {
+  text_input_mode = FALSE;
+
   if (keyboard_active && termios_saved)
     tcsetattr(0, TCSANOW, &saved_termios);
   keyboard_active = FALSE;
@@ -566,3 +988,5 @@ Sint4 getkey(void)
 
   return key;
 }
+
+#endif /* DIGGER_ELKS_KBD_TERM */
