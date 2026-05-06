@@ -139,6 +139,42 @@ static unsigned int elks_pace_late_streak;
 Uint5 frame;
 #endif
 
+#ifdef DIGGER_ELKS
+#define ELKS_DIGGER_TICKS_PER_MS 1193ul
+
+static Sint4 elks_ticks_to_ms(Uint5 ticks)
+{
+  unsigned int ms = 0;
+
+#define TMS_CHUNK(n) \
+  do { \
+    if (ticks >= (Uint5)(n) * ELKS_DIGGER_TICKS_PER_MS) { \
+      ticks -= (Uint5)(n) * ELKS_DIGGER_TICKS_PER_MS; \
+      ms += (unsigned int)(n); \
+    } \
+  } while (0)
+
+  TMS_CHUNK(16384);
+  TMS_CHUNK(8192);
+  TMS_CHUNK(4096);
+  TMS_CHUNK(2048);
+  TMS_CHUNK(1024);
+  TMS_CHUNK(512);
+  TMS_CHUNK(256);
+  TMS_CHUNK(128);
+  TMS_CHUNK(64);
+  TMS_CHUNK(32);
+  TMS_CHUNK(16);
+  TMS_CHUNK(8);
+  TMS_CHUNK(4);
+  TMS_CHUNK(2);
+  TMS_CHUNK(1);
+
+#undef TMS_CHUNK
+  return (Sint4)ms;
+}
+#endif
+
 void newframe(void)
 {
 #ifdef DIGGER_CGA_PROFILE
@@ -177,7 +213,7 @@ void newframe(void)
      */
     if (t<target) {
       Uint5 waitticks=target-t;
-      Sint4 waitms=(Sint4)(waitticks/1193ul);
+      Sint4 waitms=elks_ticks_to_ms(waitticks);
 #ifdef DIGGER_CGA_PROFILE
       elks_pace_wait_count++;
       elks_pace_late_streak = 0;
