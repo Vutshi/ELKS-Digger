@@ -170,6 +170,10 @@ Uint4 scancode;
 
 int pki;
 
+static bool * const aflagp[10]={
+  &arightpressed,&auppressed,&aleftpressed,&adownpressed,&af1pressed,
+  &aright2pressed,&aup2pressed,&aleft2pressed,&adown2pressed,&af12pressed};
+
 #ifndef _WINDOWS
 bool *flagp[10]={
   &rightpressed,&uppressed,&leftpressed,&downpressed,&f1pressed,
@@ -244,9 +248,6 @@ void readjoy(void);
 void checkkeyb(void)
 {
   int i,j,k=0;
-  bool *aflagp[10]={&arightpressed,&auppressed,&aleftpressed,&adownpressed,
-                    &af1pressed,&aright2pressed,&aup2pressed,&aleft2pressed,
-                    &adown2pressed,&af12pressed};
 #ifdef _WINDOWS
 //  readjoy();
 //  if (joybut1)
