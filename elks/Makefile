@@ -58,7 +58,8 @@ LOCALFLAGS = -DDIGGER_ELKS -DDIGGER_CGA_ONLY
 # the ELKS direct PC speaker backend.
 # SOUND=direct keeps the older small ELKS approximation.
 # SOUND=0 keeps the silent/stub build.
-SOUND ?= dos
+# SOUND=seq uses the ELKS kernel PC-speaker event sequencer for background music.
+SOUND ?= seq
 PROFILE ?= 0
 SPEED ?= 80000
 TITLEBMP ?= 1
@@ -76,6 +77,9 @@ SOUND_SRC = elks_sound_stub.c
 else ifeq ($(SOUND),direct)
 LOCALFLAGS += -DDIGGER_ELKS_PCSPK_DIRECT
 SOUND_SRC = elks_sound_stub.c
+else ifeq ($(SOUND),seq)
+LOCALFLAGS += -DDIGGER_ELKS_PCSPK_SEQ
+SOUND_SRC = elks_sound_seq.c
 else
 LOCALFLAGS += -DDIGGER_ELKS_PCSPK_DIRECT -DDIGGER_ELKS_DOS_SOUND
 SOUND_SRC = elks_sound_dos.c
