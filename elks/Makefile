@@ -19,14 +19,13 @@ HOSTCC ?= cc
 HOSTCFLAGS ?= -O2 -I../src
 CLBASE = -melks-libc -mtune=i8086 -mcmodel=small -mno-segment-relocation-stuff
 CLBASE += -fno-inline -fno-builtin-printf -fno-builtin-fprintf
-OPTFLAGS = -Os
+OPTFLAGS = -O2
 OPTFLAGS += -fno-align-jumps
 OPTFLAGS += -fno-align-functions
 OPTFLAGS += -fno-align-loops
 OPTFLAGS += -fno-align-labels
 OPTFLAGS += -fira-region=one
 OPTFLAGS += -fira-hoist-pressure
-OPTFLAGS += -freorder-blocks-algorithm=simple
 OPTFLAGS += -fno-reorder-blocks
 OPTFLAGS += -fno-prefetch-loop-arrays
 OPTFLAGS += -fno-tree-ch
