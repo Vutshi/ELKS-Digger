@@ -127,31 +127,8 @@ extern unsigned int elks_prof_monster_updates;
 
 static unsigned int cga_mul80(unsigned int row)
 {
-  /* row * 80 == row * 5 * 16.
-   *
-   * ia16-gcc is free to strength-reduce this expression back into
-   * row * 5 followed by a shift, and on the current 8086 build it emits
-   * a real MUL.  Keep the CGA hot path out of the multiplier explicitly.
-   */
-#ifdef __ia16__
-  unsigned int r;
-  asm volatile (
-    "movw %1,%%ax\n\t"
-    "movw %%ax,%%dx\n\t"
-    "shlw %%ax\n\t"   /* 2 * row */
-    "shlw %%ax\n\t"   /* 4 * row */
-    "addw %%dx,%%ax\n\t" /* 5 * row */
-    "shlw %%ax\n\t"
-    "shlw %%ax\n\t"
-    "shlw %%ax\n\t"
-    "shlw %%ax"          /* 80 * row */
-    : "=a" (r)
-    : "rm" (row)
-    : "dx", "cc");
-  return r;
-#else
+  /* row * 80 == row * 5 * 16 */
   return (unsigned int)(((row << 2) + row) << 4);
-#endif
 }
 
 static unsigned int cga_offset(Sint4 x, Sint4 y)
