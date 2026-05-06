@@ -672,7 +672,7 @@ void cgatitle(void)
 {
   cgaclear();
 #ifdef DIGGER_ELKS_TITLE_BMP
-  (void)cga_load_title_bmp("digtitle.bmp");
+  (void)cga_load_title_bmp("/lib/digtitle.bmp");
 #endif
 }
 

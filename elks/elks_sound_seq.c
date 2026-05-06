@@ -1,11 +1,11 @@
 /*
  * ELKS Digger port support code.
  *
- * Optional PC-speaker kernel sequencer backend.
+ * Optional ELKS CONFIG_AUDIO 8254 sequencer backend.
  *
  * This backend deliberately does not program PIT channel 2 or the speaker
  * gate port from user space. It feeds compact tone/rest events to the
- * ELKS console/tty PC-speaker sequencer with KIOCSNDSEQ.
+ * ELKS console/tty AUDIO_ sequencer with KIOCSNDSEQ.
  *
  * Music support:
  *   music(0) bonus tune
@@ -29,41 +29,10 @@
 #include <sys/ioctl.h>
 #include <linuxmt/kd.h>
 
-#ifndef KIOCSNDSEQ
-#define PCSPK_SEQ_NEED_COMPAT_STRUCTS 1
-#define KIOCSNDSEQ          (('K' << 8) + 0x30)
-#endif
-#ifndef PCSPK_F_REST
-#define PCSPK_F_REST        0x00
-#endif
-#ifndef PCSPK_F_TONE
-#define PCSPK_F_TONE        0x01
-#endif
-#ifndef PCSPK_F_STOP
-#define PCSPK_F_STOP        0x02
-#endif
-#ifndef PCSPK_SEQ_F_FLUSH
-#define PCSPK_SEQ_F_FLUSH   0x0001
-#endif
-#ifndef PCSPK_SEQ_F_STOP
-#define PCSPK_SEQ_F_STOP    0x0002
-#endif
-
-#ifdef PCSPK_SEQ_NEED_COMPAT_STRUCTS
-struct pcspk_event {
-  unsigned short divisor;
-  unsigned short ticks;
-  unsigned char flags;
-  unsigned char priority;
-};
-
-struct pcspk_seq {
-  struct pcspk_event *events;
-  unsigned short count;
-  unsigned short rate_hz;
-  unsigned short flags;
-};
-#endif
+/*
+ * Requires the updated ELKS CONFIG_AUDIO public ABI from <linuxmt/kd.h>:
+ * KIOCSNDSEQ, struct audio_event, struct audio_seq, and AUDIO_* flags.
+ */
 
 #ifdef DIGGER_CGA_PROFILE
 unsigned int elks_soundint_count;
@@ -151,9 +120,9 @@ struct seq_music_state {
 };
 
 static struct seq_music_state seq_music;
-static struct pcspk_event seq_events[SEQ_BURST_EVENTS];
-static struct pcspk_event seq_sfx_events[SEQ_SFX_EVENTS];
-static struct pcspk_event seq_level_events[SEQ_LEVELDONE_NOTES];
+static struct audio_event seq_events[SEQ_BURST_EVENTS];
+static struct audio_event seq_sfx_events[SEQ_SFX_EVENTS];
+static struct audio_event seq_level_events[SEQ_LEVELDONE_NOTES];
 
 static const unsigned short bonusfreqs[10] = {
   0x11d1u, 0x0d59u, 0x0be4u, 0x0a98u, 0x0e24u,
@@ -245,10 +214,10 @@ static int seq_open_fd(void)
   return seq_fd;
 }
 
-static int seq_ioctl_events(struct pcspk_event *events, unsigned short count,
+static int seq_ioctl_events(struct audio_event *events, unsigned short count,
                             unsigned short flags)
 {
-  struct pcspk_seq req;
+  struct audio_seq req;
 
   if (seq_open_fd() < 0)
     return -1;
@@ -265,8 +234,8 @@ static void seq_stop_flush(void)
 {
   seq_refill_wait = 0;
   seq_sfx_prio = 0;
-  (void)seq_ioctl_events((struct pcspk_event *)0, 0,
-                         PCSPK_SEQ_F_STOP | PCSPK_SEQ_F_FLUSH);
+  (void)seq_ioctl_events((struct audio_event *)0, 0,
+                         AUDIO_SEQ_F_STOP | AUDIO_SEQ_F_FLUSH);
   seq_kernel_active = 0;
 }
 
@@ -403,7 +372,7 @@ static void seq_prepare_note(struct seq_music_state *st)
 }
 
 static unsigned char seq_next_event(struct seq_music_state *st,
-                                    struct pcspk_event *ev)
+                                    struct audio_event *ev)
 {
   if (st->phase == 0)
     seq_prepare_note(st);
@@ -411,7 +380,7 @@ static unsigned char seq_next_event(struct seq_music_state *st,
   if (st->phase == 1) {
     ev->divisor = (st->divisor == SEQ_REST_DIVISOR) ? 0u : st->divisor;
     ev->ticks = st->tone_ticks ? st->tone_ticks : 1u;
-    ev->flags = (st->divisor == SEQ_REST_DIVISOR) ? PCSPK_F_REST : PCSPK_F_TONE;
+    ev->flags = (st->divisor == SEQ_REST_DIVISOR) ? AUDIO_F_REST : AUDIO_F_TONE;
     ev->priority = 0;
     st->phase = st->rest_ticks ? 2u : 0u;
     return 1;
@@ -419,7 +388,7 @@ static unsigned char seq_next_event(struct seq_music_state *st,
 
   ev->divisor = 0;
   ev->ticks = st->rest_ticks ? st->rest_ticks : 1u;
-  ev->flags = PCSPK_F_REST;
+  ev->flags = AUDIO_F_REST;
   ev->priority = 0;
   st->phase = 0;
   return 1;
@@ -427,7 +396,7 @@ static unsigned char seq_next_event(struct seq_music_state *st,
 
 static void seq_advance_music(unsigned short accepted)
 {
-  struct pcspk_event dummy;
+  struct audio_event dummy;
 
   while (accepted != 0) {
     (void)seq_next_event(&seq_music, &dummy);
@@ -438,7 +407,7 @@ static void seq_advance_music(unsigned short accepted)
 static void seq_refill_music(void)
 {
   struct seq_music_state tmp;
-  struct pcspk_event *ev;
+  struct audio_event *ev;
   unsigned short count;
   int ret;
 
@@ -473,15 +442,15 @@ static void seq_refill_music(void)
   }
 }
 
-static void seq_sfx_put(struct pcspk_event **evp, unsigned short divisor,
+static void seq_sfx_put(struct audio_event **evp, unsigned short divisor,
                         unsigned short digger_ticks)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = *evp;
   ev->divisor = divisor;
   ev->ticks = seq_digger_ticks_to_kernel(digger_ticks);
-  ev->flags = divisor ? PCSPK_F_TONE : PCSPK_F_REST;
+  ev->flags = divisor ? AUDIO_F_TONE : AUDIO_F_REST;
   ev->priority = 1u;
   *evp = ev + 1;
 }
@@ -514,7 +483,7 @@ static void seq_sfx_queue_prio(unsigned char count, unsigned short hold_ticks,
   seq_refill_wait = 0;
 
   ret = seq_ioctl_events(seq_sfx_events, (unsigned short)count,
-                         PCSPK_SEQ_F_FLUSH);
+                         AUDIO_SEQ_F_FLUSH);
   if (ret > 0)
     seq_kernel_active = 1;
   else {
@@ -530,7 +499,7 @@ static void seq_sfx_queue(unsigned char count, unsigned short hold_ticks)
 
 static void seq_sfx_single(unsigned short divisor, unsigned short ticks)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, divisor, ticks);
@@ -539,7 +508,7 @@ static void seq_sfx_single(unsigned short divisor, unsigned short ticks)
 
 static void seq_sfx_fire(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 600u, 1u);
@@ -550,7 +519,7 @@ static void seq_sfx_fire(void)
 
 static void seq_sfx_explode(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 1500u, 2u);
@@ -566,7 +535,7 @@ static void seq_sfx_explode(void)
 
 static void seq_sfx_emerald(unsigned char n)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
   unsigned short divisor;
 
   divisor = seq_emerald_freqs[n & 7u];
@@ -580,7 +549,7 @@ static void seq_sfx_emerald(unsigned char n)
 
 static void seq_sfx_gold(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 500u, 3u);
@@ -596,7 +565,7 @@ static void seq_sfx_gold(void)
 
 static void seq_sfx_eatm(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 2000u, 2u);
@@ -612,7 +581,7 @@ static void seq_sfx_eatm(void)
 
 static void seq_sfx_fall(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 1000u, 2u);
@@ -628,7 +597,7 @@ static void seq_sfx_fall(void)
 
 static void seq_sfx_wobble(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 0x07d0u, 3u);
@@ -640,7 +609,7 @@ static void seq_sfx_wobble(void)
 
 static void seq_sfx_bonus(void)
 {
-  struct pcspk_event *ev;
+  struct audio_event *ev;
 
   ev = seq_sfx_events;
   seq_sfx_put(&ev, 0x04ceu, 3u);
@@ -663,12 +632,12 @@ static void seq_queue_leveldone(void)
   for (i = 0; i < SEQ_LEVELDONE_NOTES; i++) {
     seq_level_events[i].divisor = leveldone_divs[i];
     seq_level_events[i].ticks = ticks;
-    seq_level_events[i].flags = PCSPK_F_TONE;
+    seq_level_events[i].flags = AUDIO_F_TONE;
     seq_level_events[i].priority = SEQ_SFX_PRIO_HIGH;
   }
 
   if (seq_ioctl_events(seq_level_events, SEQ_LEVELDONE_NOTES,
-                       PCSPK_SEQ_F_FLUSH) > 0)
+                       AUDIO_SEQ_F_FLUSH) > 0)
     seq_kernel_active = 1;
 }
 
