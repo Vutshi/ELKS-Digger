@@ -15,10 +15,6 @@ They chase.
 Bags fall.  
 Everything gets chaotic very quickly.
 
-Original Digger Remastered project and source:
-
-https://www.digger.org
-
 ## What is ELKS?
 
 ELKS is a small operating system inspired by Linux, designed for old and resource-constrained 16-bit x86 machines.
