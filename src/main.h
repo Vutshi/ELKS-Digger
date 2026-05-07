@@ -5,6 +5,7 @@ Sint4 getlevch(Sint4 bp6,Sint4 bp8,Sint4 bpa);
 void incpenalty(void);
 Sint4 levplan(void);
 Sint4 levof10(void);
+Sint4 levno(void);
 void setdead(bool df);
 void cleartopline(void);
 void finish(void);

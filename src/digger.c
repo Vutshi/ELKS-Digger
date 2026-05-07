@@ -12,6 +12,7 @@
 #include "monster.h"
 #include "scores.h"
 #include "bags.h"
+#include "replay.h"
 
 #ifdef _WINDOWS
 #include "win_dig.h"
@@ -151,6 +152,13 @@ void newframe(void)
 #ifdef DIGGER_ELKS
   Uint5 target;
 #endif
+#ifdef DIGGER_REPLAY
+  if (replay_fast()) {
+    fillbuffer();
+    curtime += ftime;
+  }
+  else
+#endif
   if (synchvid) {
     for (;curtime<ftime;curtime+=17094) { /* 17094 = ticks in a refresh */
 #ifdef _WINDOWS
@@ -289,6 +297,9 @@ void dodigger(void)
 {
   int n;
   newframe();
+#ifdef DIGGER_REPLAY
+  replay_frame_boundary();
+#endif
 #ifdef DIGGER_CGA_PROFILE
   elks_live_frame_count++;
 #endif

@@ -66,6 +66,7 @@ KEYBOARD ?= kraw
 PROFILE ?= 0
 SPEED ?= 80000
 TITLEBMP ?= 1
+REPLAY ?= 1
 LOCALFLAGS += -DDIGGER_ELKS_DEFAULT_FTIME=$(SPEED)
 ifeq ($(KEYBOARD),kraw)
 LOCALFLAGS += -DDIGGER_ELKS_KBD_KRAW
@@ -80,6 +81,9 @@ TITLEBMP_ASSET = $(BINDIR)/digtitle.bmp
 endif
 ifeq ($(PROFILE),1)
 LOCALFLAGS += -DDIGGER_CGA_PROFILE
+endif
+ifeq ($(REPLAY),1)
+LOCALFLAGS += -DDIGGER_REPLAY
 endif
 ifeq ($(SOUND),0)
 LOCALFLAGS += -DDIGGER_SOUND_STUB
@@ -98,6 +102,10 @@ endif
 CORE_SRCS = \
 	../src/main.c ../src/digger.c ../src/monster.c ../src/bags.c ../src/drawing.c ../src/sprite.c \
 	../src/scores.c ../src/input.c
+
+ifeq ($(REPLAY),1)
+CORE_SRCS += ../src/replay.c
+endif
 
 PORT_SRCS = \
 	elks_hw.c elks_input.c elks_cga.c $(SOUND_SRC)

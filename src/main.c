@@ -22,6 +22,7 @@ unsigned int elks_incmont_count;
 #endif
 #include "bags.h"
 #include "record.h"
+#include "replay.h"
 #include "main.h"
 #ifndef DIGGER_ELKS
 #include "newsnd.h"
@@ -199,15 +200,27 @@ void game(void)
     while (!alldead && !escape && !timeout) {
       initmbspr();
 
+#ifdef DIGGER_REPLAY
+      if (replay_is_playing())
+        randv=replay_play_seed();
+      else
+        randv=getlrt();
+#else
       if (playing)
         randv=playgetrand();
       else
         randv=getlrt();
+#endif
 #ifdef INTDRF
       fprintf(info,"%lu\n",randv);
       frame=0;
 #endif
+#ifdef DIGGER_REPLAY
+      if (replay_is_recording())
+        replay_begin_block(randv);
+#else
       recputrand(randv);
+#endif
       if (levnotdrawn) {
         levnotdrawn=FALSE;
         drawscreen();
@@ -243,9 +256,15 @@ void game(void)
 #ifdef DIGGER_ELKS
       if (startpause) {
         startpause=FALSE;
-        pausef=TRUE;
-        testpause();
-        flushkeybuf();
+#ifdef DIGGER_REPLAY
+        if (!replay_is_playing()) {
+#endif
+          pausef=TRUE;
+          testpause();
+          flushkeybuf();
+#ifdef DIGGER_REPLAY
+        }
+#endif
       }
 #endif
       for (i=0;i<diggers;i++)
@@ -292,11 +311,19 @@ void game(void)
       cleanupbags();
       savefield();
       erasemonsters();
-      recputeol();
-      if (playing)
-        playskipeol();
-      if (escape)
-        recputeog();
+#ifdef DIGGER_REPLAY
+      if (replay_has_request())
+        replay_end_block();
+      else {
+#endif
+        recputeol();
+        if (playing)
+          playskipeol();
+        if (escape)
+          recputeog();
+#ifdef DIGGER_REPLAY
+      }
+#endif
       if (gamedat[curplayer].levdone)
         soundlevdone();
       if (countem()==0 || gamedat[curplayer].levdone) {
@@ -371,6 +398,18 @@ int mainprog(void)
 #endif
   loadscores();
   escape=FALSE;
+#ifdef DIGGER_REPLAY
+  if (replay_has_request() && replay_play_header()) {
+    game();
+    replay_finish();
+    finish();
+    return replay_exit_status();
+  }
+  if (replay_has_request() && replay_exit_status()) {
+    finish();
+    return replay_exit_status();
+  }
+#endif
   do {
 #ifdef _WINDOWS
     show_main_menu();
@@ -481,8 +520,18 @@ int mainprog(void)
 #endif
     if (escape)
       break;
+#ifdef DIGGER_REPLAY
+    replay_record_header();
+    if (escape)
+      break;
+#endif
     recinit();
     game();
+#ifdef DIGGER_REPLAY
+    replay_finish();
+    if (replay_has_request())
+      break;
+#endif
 #ifndef DIGGER_RECORD_STUB
     gotgame=TRUE;
     if (gotname)
@@ -492,6 +541,10 @@ int mainprog(void)
     escape=FALSE;
   } while (!escape);
   finish();
+#ifdef DIGGER_REPLAY
+  if (replay_has_request())
+    return replay_exit_status();
+#endif
   return 0;
 }
 
@@ -760,10 +813,25 @@ void parsecmd(int argc,char *argv[])
             gtime=120;
           gauntlet=TRUE;
           break;
+#ifdef DIGGER_REPLAY
+        case 'R': case 'r':
+          replay_set_record_name(word+i);
+          break;
+        case 'P': case 'p':
+          replay_set_play_name(word+i);
+          break;
+        case 'F': case 'f':
+          replay_set_fast();
+          break;
+#endif
         case '?': case 'h': case 'H':
           finish();
           puts("DIGGER ELKS "DIGGER_VERSION);
+#ifdef DIGGER_REPLAY
+          puts("Options: /S:n /I:n /L:file /Q /M /G[:n] /2 /U /K[A] /R:file /P:file /F");
+#else
           puts("Options: /S:n /I:n /L:file /Q /M /G[:n] /2 /U /K[A]");
+#endif
           exit(1);
       }
     }
