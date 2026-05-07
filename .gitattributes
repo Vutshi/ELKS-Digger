@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# binary assets / build outputs
+*.bmp binary
+*.spr binary
+*.o binary
+*.obj binary
+*.oaj binary
+*.com binary
+*.exe binary
+*.bin binary
+*.lib binary
+*.a binary
+*.gz binary
+*.zip binary
+*.tar binary
+*.DS_Store binary

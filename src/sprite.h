@@ -37,5 +37,5 @@ extern void (*gtitle)(void);
 extern void (*gwrite)(Sint4 x,Sint4 y,Sint4 ch,Sint4 c);
 #endif
 
-extern Sint3 first[TYPES],coll[SPRITES];
-void snapshotcollisions(Sint3 *clfirst,Sint3 *clcoll);
+extern Sint4 first[TYPES],coll[SPRITES];
+void snapshotcollisions(Sint4 *clfirst,Sint4 *clcoll);

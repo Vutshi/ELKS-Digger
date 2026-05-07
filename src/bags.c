@@ -275,7 +275,7 @@ void baghitground(Sint4 bag)
 bool pushbag(Sint4 bag,Sint4 dir)
 {
   Sint4 x,y,h,v,xr,yr,ox,oy;
-  Sint3 clfirst[TYPES],clcoll[SPRITES];
+  Sint4 clfirst[TYPES],clcoll[SPRITES];
   int i;
   bool push=TRUE,digf;
   ox=x=bagdat[bag].x;
@@ -410,7 +410,7 @@ bool pushbag(Sint4 bag,Sint4 dir)
   return push;
 }
 
-bool pushbags(Sint4 dir,Sint3 *clfirst,Sint3 *clcoll)
+bool pushbags(Sint4 dir,Sint4 *clfirst,Sint4 *clcoll)
 {
   bool push=TRUE;
   int next=clfirst[1];
@@ -422,7 +422,7 @@ bool pushbags(Sint4 dir,Sint3 *clfirst,Sint3 *clcoll)
   return push;
 }
 
-bool pushudbags(Sint3 *clfirst,Sint3 *clcoll)
+bool pushudbags(Sint4 *clfirst,Sint4 *clcoll)
 {
   bool push=TRUE;
   int next=clfirst[1];
@@ -465,7 +465,7 @@ Sint4 getbagdir(Sint4 bag)
   return -1;
 }
 
-void removebags(Sint3 *clfirst,Sint3 *clcoll)
+void removebags(Sint4 *clfirst,Sint4 *clcoll)
 {
   int next=clfirst[1];
   while (next!=-1) {

@@ -64,8 +64,8 @@ static bool service_poll_active;
 static bool text_input_mode;
 
 static Sint4 keyq[ELKS_KEYQ_LEN];
-static unsigned char keyq_head;
-static unsigned char keyq_tail;
+static unsigned int keyq_head;
+static unsigned int keyq_tail;
 
 #ifdef DIGGER_CGA_PROFILE
 unsigned int elks_input_read_count;
@@ -89,9 +89,9 @@ static void queue_clear(void)
 
 static void queue_key(Sint4 key)
 {
-  unsigned char next;
+  unsigned int next;
 
-  next = (unsigned char)((keyq_head + 1) & ELKS_KEYQ_MASK);
+  next = (keyq_head + 1) & ELKS_KEYQ_MASK;
   if (next == keyq_tail) {
 #ifdef DIGGER_CGA_PROFILE
     elks_input_overflow_count++;
@@ -103,10 +103,10 @@ static void queue_key(Sint4 key)
   keyq_head = next;
 #ifdef DIGGER_CGA_PROFILE
   {
-    unsigned char qd = (unsigned char)((keyq_head - keyq_tail) & ELKS_KEYQ_MASK);
+    unsigned int qd = (keyq_head - keyq_tail) & ELKS_KEYQ_MASK;
     elks_input_queued_count++;
-    if ((unsigned int)qd > elks_input_maxq)
-      elks_input_maxq = (unsigned int)qd;
+    if (qd > elks_input_maxq)
+      elks_input_maxq = qd;
   }
 #endif
 }
@@ -117,7 +117,7 @@ static bool dequeue_key(Sint4 *key)
     return FALSE;
 
   *key = keyq[keyq_tail];
-  keyq_tail = (unsigned char)((keyq_tail + 1) & ELKS_KEYQ_MASK);
+  keyq_tail = (keyq_tail + 1) & ELKS_KEYQ_MASK;
   return TRUE;
 }
 
@@ -234,7 +234,7 @@ static unsigned char raw_ctrl_down;
 
 static void raw_clear_state(void)
 {
-  unsigned char i;
+  int i;
 
   for (i = 0; i < ELKS_RAW_SCANCODE_MAX; i++)
     raw_down[i] = 0;

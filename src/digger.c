@@ -26,9 +26,9 @@ struct digger
 
 Sint4 startbonustimeleft=0,bonustimeleft;
 
-Sint4 emmask=0;
+Uint3 emmask=0;
 
-Sint3 emfield[MSIZE];
+Uint3 emfield[MSIZE];
 
 bool bonusvisible=FALSE,bonusmode=FALSE,digvisible;
 
@@ -273,9 +273,15 @@ void drawdig(int n,int d,int x,int y,bool f)
     digdat[n].ivt--;
     if (digdat[n].ivt==0)
       digdat[n].invin=FALSE;
-    else
+    else {
+#ifdef DIGGER_ELKS
+      if ((digdat[n].ivt & 4) == 0)
+        erasespr(FIRSTDIGGER+n-curplayer);
+#else
       if (digdat[n].ivt%10<5)
         erasespr(FIRSTDIGGER+n-curplayer);
+#endif
+    }
   }
 }
 
@@ -350,7 +356,7 @@ void dodigger(void)
 void updatefire(int n)
 {
   Sint4 pix=0;
-  Sint3 clfirst[TYPES],clcoll[SPRITES];
+  Sint4 clfirst[TYPES],clcoll[SPRITES];
   int i;
   bool clflag=FALSE;
   if (digdat[n].notfiring) {
@@ -530,7 +536,7 @@ void updatedigger(int n)
   bool dir_input;
 #endif
   bool push=TRUE;
-  Sint3 clfirst[TYPES],clcoll[SPRITES];
+  Sint4 clfirst[TYPES],clcoll[SPRITES];
   readdir(n-curplayer);
   dir=getdir(n-curplayer);
 #ifdef DIGGER_ELKS
@@ -712,7 +718,7 @@ Sint4 deatharc[7]={3,5,6,6,5,3,0};
 
 void diggerdie(int n)
 {
-  Sint3 clfirst[TYPES],clcoll[SPRITES];
+  Sint4 clfirst[TYPES],clcoll[SPRITES];
   int i;
   bool alldead;
   switch (digdat[n].deathstage) {

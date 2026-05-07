@@ -34,7 +34,7 @@ Sint4 sprnbhei[SPRITES];
  * Sorted order preserves the original ascending sprite-number behaviour.
  */
 static Sint4 spract[SPRITES];
-static Sint3 spractidx[SPRITES];
+static Sint4 spractidx[SPRITES];
 static Sint4 spractcnt=0;
 static bool spractinit=FALSE;
 
@@ -44,8 +44,8 @@ static bool spractinit=FALSE;
  * original ascending sprite-number draw order without scanning every active
  * sprite just to find the few marked ones.
  */
-static Sint3 sprdirty[SPRITES];
-static Sint3 sprdirtyidx[SPRITES];
+static Sint4 sprdirty[SPRITES];
+static Sint4 sprdirtyidx[SPRITES];
 static Sint4 sprdirtycnt=0;
 
 #ifdef DIGGER_CGA_PROFILE
@@ -147,10 +147,10 @@ static void spr_dirty_add(Sint4 n)
     pos++;
   for (i=sprdirtycnt;i>pos;i--) {
     sprdirty[i]=sprdirty[i-1];
-    sprdirtyidx[sprdirty[i]]=(Sint3)i;
+    sprdirtyidx[sprdirty[i]]=i;
   }
-  sprdirty[pos]=(Sint3)n;
-  sprdirtyidx[n]=(Sint3)pos;
+  sprdirty[pos]=n;
+  sprdirtyidx[n]=pos;
   sprdirtycnt++;
 }
 
@@ -165,7 +165,7 @@ static void spr_dirty_remove(Sint4 n)
     return;
   for (i=pos;i<sprdirtycnt-1;i++) {
     sprdirty[i]=sprdirty[i+1];
-    sprdirtyidx[sprdirty[i]]=(Sint3)i;
+    sprdirtyidx[sprdirty[i]]=i;
   }
   sprdirtycnt--;
   sprdirtyidx[n]=-1;
@@ -195,10 +195,10 @@ static void sprlist_enable(Sint4 n)
     pos++;
   for (i=spractcnt;i>pos;i--) {
     spract[i]=spract[i-1];
-    spractidx[spract[i]]=(Sint3)i;
+    spractidx[spract[i]]=i;
   }
   spract[pos]=n;
-  spractidx[n]=(Sint3)pos;
+  spractidx[n]=pos;
   spractcnt++;
   if (sprrdrwf[n])
     spr_dirty_add(n);
@@ -218,7 +218,7 @@ static void sprlist_disable(Sint4 n)
     return;
   for (i=pos;i<spractcnt-1;i++) {
     spract[i]=spract[i+1];
-    spractidx[spract[i]]=(Sint3)i;
+    spractidx[spract[i]]=i;
   }
   spractcnt--;
   spractidx[n]=-1;
@@ -503,14 +503,14 @@ void putis(void)
   }
 }
 
-Sint3 first[TYPES],coll[SPRITES];
+Sint4 first[TYPES],coll[SPRITES];
 int firstt[TYPES]={FIRSTBONUS,FIRSTBAG,FIRSTMONSTER,FIRSTFIREBALL,FIRSTDIGGER};
 int lastt[TYPES]={LASTBONUS,LASTBAG,LASTMONSTER,LASTFIREBALL,LASTDIGGER};
 
 void bcollides(int spr)
 {
   int spc,next,i,ai;
-  Sint3 tail[TYPES];
+  Sint4 tail[TYPES];
 
   SPRPROF_INC(elks_prof_bcollides_calls);
   for (next=0;next<TYPES;next++)
@@ -541,22 +541,22 @@ void bcollides(int spr)
       i=4;
     coll[spc]=-1;
     if (tail[i]==-1)
-      first[i]=tail[i]=(Sint3)spc;
+      first[i]=tail[i]=spc;
     else {
-      coll[tail[i]]=(Sint3)spc;
-      tail[i]=(Sint3)spc;
+      coll[tail[i]]=spc;
+      tail[i]=spc;
     }
   }
 }
 
 
-void snapshotcollisions(Sint3 *clfirst,Sint3 *clcoll)
+void snapshotcollisions(Sint4 *clfirst,Sint4 *clcoll)
 {
   Sint4 t,next;
 
   for (t=0;t<TYPES;t++) {
     next=first[t];
-    clfirst[t]=(Sint3)next;
+    clfirst[t]=next;
     while (next!=-1) {
       clcoll[next]=coll[next];
       next=coll[next];
