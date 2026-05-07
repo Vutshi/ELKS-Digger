@@ -45,6 +45,7 @@ Options:
 * `SOUND=dos` — original DOS Digger sound logic using the direct PC speaker backend.
 * `SOUND=none` — build without sound.
 * `TITLEBMP=1/0` — include/omit title bitmap.
+* `REPLAY = 1/0` — replay support.
 
 Run `make clean` when switching options.
 
@@ -58,6 +59,19 @@ digger
 ```
 
 Keep `digtitle.bmp` in `/lib` folder.
+
+### Replay recording and playback
+
+When built with replay support (`REPLAY=1`), Digger can record and replay deterministic gameplay sessions.
+
+```sh
+digger /R:game.edr      # record
+digger /P:game.edr      # replay
+digger /P:game.edr /F   # replay without normal frame delays
+```
+
+Replay stores game setup, random seeds, level data, and per-frame input. Normal gameplay is unchanged when replay options are not used.
+
 
 ## Input mapping
 

@@ -6,6 +6,7 @@
 #include "sound.h"
 #include "hardware.h"
 #include "record.h"
+#include "replay.h"
 #include "digger.h"
 #ifdef _WINDOWS
 #include "win_dig.h"
@@ -254,6 +255,10 @@ void checkkeyb(void)
 //  else
 //    firepflag=FALSE;
 #endif
+#ifdef DIGGER_REPLAY
+  if (replay_is_playing())
+    return;
+#endif
 #ifdef DIGGER_ELKS
   elks_input_service();
 #endif
@@ -300,9 +305,15 @@ void checkkeyb(void)
       case 11: /* Increase speed */
         if (ftime>10000l)
           ftime-=10000l;
+#ifdef DIGGER_REPLAY
+        replay_note_event(REPLAY_MASK_SPEEDUP);
+#endif
         break;
       case 12: /* Decrease speed */
         ftime+=10000l;
+#ifdef DIGGER_REPLAY
+        replay_note_event(REPLAY_MASK_SPEEDDN);
+#endif
         break;
       case 13: /* Toggle music */
         musicflag=!musicflag;
@@ -312,9 +323,15 @@ void checkkeyb(void)
         break;
       case 15: /* Exit */
         escape=TRUE;
+#ifdef DIGGER_REPLAY
+        replay_note_event(REPLAY_MASK_ESCAPE);
+#endif
         break;
       case 16: /* Pause */
         pausef=TRUE;
+#ifdef DIGGER_REPLAY
+        replay_note_event(REPLAY_MASK_PAUSE);
+#endif
     }
 #ifndef DIGGER_RECORD_STUB
     if (akeypressed==ASCIIF8) /* Save DRF */
@@ -324,6 +341,53 @@ void checkkeyb(void)
       start=TRUE;                                /* Change number of players */
   }
 }
+
+
+#ifdef DIGGER_REPLAY
+unsigned int replay_capture_input(void)
+{
+  unsigned int mask;
+
+  mask = 0;
+  if (rightpressed || arightpressed)
+    mask |= REPLAY_MASK_P1_RIGHT;
+  if (uppressed || auppressed)
+    mask |= REPLAY_MASK_P1_UP;
+  if (leftpressed || aleftpressed)
+    mask |= REPLAY_MASK_P1_LEFT;
+  if (downpressed || adownpressed)
+    mask |= REPLAY_MASK_P1_DOWN;
+  if (f1pressed || af1pressed)
+    mask |= REPLAY_MASK_P1_FIRE;
+  if (right2pressed || aright2pressed)
+    mask |= REPLAY_MASK_P2_RIGHT;
+  if (up2pressed || aup2pressed)
+    mask |= REPLAY_MASK_P2_UP;
+  if (left2pressed || aleft2pressed)
+    mask |= REPLAY_MASK_P2_LEFT;
+  if (down2pressed || adown2pressed)
+    mask |= REPLAY_MASK_P2_DOWN;
+  if (f12pressed || af12pressed)
+    mask |= REPLAY_MASK_P2_FIRE;
+  if (escape)
+    mask |= REPLAY_MASK_ESCAPE;
+  return mask;
+}
+
+void replay_inject_input(unsigned int mask)
+{
+  rightpressed = arightpressed = (mask & REPLAY_MASK_P1_RIGHT) ? TRUE : FALSE;
+  uppressed = auppressed = (mask & REPLAY_MASK_P1_UP) ? TRUE : FALSE;
+  leftpressed = aleftpressed = (mask & REPLAY_MASK_P1_LEFT) ? TRUE : FALSE;
+  downpressed = adownpressed = (mask & REPLAY_MASK_P1_DOWN) ? TRUE : FALSE;
+  f1pressed = af1pressed = (mask & REPLAY_MASK_P1_FIRE) ? TRUE : FALSE;
+  right2pressed = aright2pressed = (mask & REPLAY_MASK_P2_RIGHT) ? TRUE : FALSE;
+  up2pressed = aup2pressed = (mask & REPLAY_MASK_P2_UP) ? TRUE : FALSE;
+  left2pressed = aleft2pressed = (mask & REPLAY_MASK_P2_LEFT) ? TRUE : FALSE;
+  down2pressed = adown2pressed = (mask & REPLAY_MASK_P2_DOWN) ? TRUE : FALSE;
+  f12pressed = af12pressed = (mask & REPLAY_MASK_P2_FIRE) ? TRUE : FALSE;
+}
+#endif
 
 /* Joystick not yet implemented. It will be, though, using gethrt on platform
    DOSPC. */
