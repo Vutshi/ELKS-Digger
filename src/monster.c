@@ -139,7 +139,12 @@ void createmonster(void)
       mondat[i].dir=DIR_LEFT;
       mondat[i].hdir=DIR_LEFT;
       mondat[i].chase=chase+curplayer;
-      chase=(chase+1)%diggers;
+#ifdef DIGGER_ELKS
+      /* diggers is 1 or 2, so this is equivalent to (chase+1)%diggers. */
+      chase = (chase + 1) & (diggers - 1);
+#else
+      chase = (chase + 1) % diggers;
+#endif
       nextmonster++;
       nextmontime=mongaptime;
       mondat[i].stime=5;
@@ -159,7 +164,7 @@ void monai(Sint4 mon)
 {
   Sint4 monox,monoy,dir,mdirp1,mdirp2,mdirp3,mdirp4,t;
   Sint4 mh,mv,mxr,myr;
-  Sint3 clcoll[SPRITES],clfirst[TYPES];
+  Sint4 clcoll[SPRITES],clfirst[TYPES];
   int i,m,dig;
   bool push;
 #ifdef DIGGER_CGA_PROFILE
@@ -612,7 +617,7 @@ void killmon(Sint4 mon)
   }
 }
 
-void squashmonsters(Sint4 bag,Sint3 *clfirst,Sint3 *clcoll)
+void squashmonsters(Sint4 bag,Sint4 *clfirst,Sint4 *clcoll)
 {
   int next=clfirst[2],m;
   while (next!=-1) {
@@ -623,7 +628,7 @@ void squashmonsters(Sint4 bag,Sint3 *clfirst,Sint3 *clcoll)
   }
 }
 
-Sint4 killmonsters(Sint3 *clfirst,Sint3 *clcoll)
+Sint4 killmonsters(Sint4 *clfirst,Sint4 *clcoll)
 {
   int next=clfirst[2],m,n=0;
   while (next!=-1) {

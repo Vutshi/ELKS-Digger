@@ -337,7 +337,7 @@ void getinitials(void)
 void flashywait(Sint4 n)
 {
   Sint4 i,gt,cx,p=0;
-  Sint3 gap=19;
+  Sint4 gap=19;
   setretr(FALSE);
   for (i=0;i<(n<<1);i++)
     for (cx=0;cx<volume;cx++) {
@@ -452,7 +452,7 @@ void numtostring(char *p,Sint5 n)
 {
   int x;
   for (x=0;x<7;x++) {
-    p[6-x]=(Sint3)(n%10L)+'0';
+    p[6-x]=(char)(n%10L)+'0';
     n/=10L;
     if (n==0L) {
       x++;

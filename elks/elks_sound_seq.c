@@ -112,7 +112,7 @@ static const unsigned char *seq_cur_durs;
 static unsigned char seq_cur_widthsub;
 
 struct seq_music_state {
-  unsigned char pos;
+  unsigned int pos;
   unsigned char phase;          /* 0: need note, 1: tone pending, 2: rest pending */
   unsigned short divisor;
   unsigned short tone_ticks;
@@ -624,7 +624,7 @@ static void seq_sfx_bonus(void)
 
 static void seq_queue_leveldone(void)
 {
-  unsigned char i;
+  unsigned int i;
   unsigned short ticks;
 
   ticks = seq_digger_ticks_to_kernel(SEQ_LEVELDONE_DIGGER_TICKS);

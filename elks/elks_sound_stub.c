@@ -87,20 +87,20 @@ void (*soundkillglob)(void) = backend_soundoff;
 #define ELKS_PCSPK_REST_DIV      0x7d00u
 #define ELKS_MUSIC_TICKS         7u
 
-#define ARRAYSIZE(a) ((unsigned char)(sizeof(a) / sizeof((a)[0])))
+#define ARRAYSIZE(a) ((unsigned int)(sizeof(a) / sizeof((a)[0])))
 
 static unsigned char speaker_on;
 static unsigned short last_divisor;
 static unsigned char sound_paused;
 
 static unsigned char level_on;
-static unsigned char level_pos;
+static unsigned int level_pos;
 static unsigned char level_ticks;
 
 static unsigned char music_on;
 static unsigned char music_tune;
 static unsigned char music_ticks;
-static unsigned char music_pos;
+static unsigned int music_pos;
 
 static unsigned char bonus_on;
 static unsigned char bonus_phase;
@@ -219,7 +219,7 @@ static void backend_soundoff(void)
 
 static void clear_effect_state(void)
 {
-  unsigned char i;
+  int i;
 
   level_on = level_pos = level_ticks = 0;
   bonus_on = bonus_phase = 0;
@@ -287,7 +287,7 @@ static unsigned short update_music(unsigned short div)
     music_ticks--;
   else {
     music_ticks = ELKS_MUSIC_TICKS;
-    music_pos = (unsigned char)((music_pos + 1u) & 7u);
+    music_pos = (music_pos + 1u) & 7u;
   }
 
   return music_divs[(music_pos + music_tune) & 7u];
@@ -378,8 +378,8 @@ static unsigned short update_em_click(unsigned short div)
 
 static unsigned short update_explode(unsigned short div)
 {
-  unsigned char i;
-  unsigned char n;
+  int i;
+  unsigned int n;
 
   for (i = 0; i < FIREBALLS; i++) {
     if (explode_on[i]) {
@@ -405,8 +405,8 @@ static unsigned short update_explode(unsigned short div)
 
 static unsigned short update_fire(unsigned short div)
 {
-  unsigned char i;
-  unsigned char n;
+  int i;
+  unsigned int n;
 
   for (i = 0; i < FIREBALLS; i++) {
     if (fire_on[i]) {

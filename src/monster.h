@@ -7,9 +7,9 @@ void erasemonsters(void);
 void initmonsters(void);
 Sint4 monleft(void);
 void killmon(Sint4 mon);
-Sint4 killmonsters(Sint3 *clfirst,Sint3 *clcoll);
+Sint4 killmonsters(Sint4 *clfirst,Sint4 *clcoll);
 void checkmonscared(Sint4 h);
-void squashmonsters(Sint4 bag,Sint3 *clfirst,Sint3 *clcoll);
+void squashmonsters(Sint4 bag,Sint4 *clfirst,Sint4 *clcoll);
 void mongold(void);
 
 #ifndef DIGGER_ELKS
