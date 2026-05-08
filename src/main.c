@@ -69,6 +69,9 @@ void finish(void);
 void inir(void);
 void redefkeyb(bool allf);
 int getalllives(void);
+#ifdef DIGGER_ELKS
+static void srandno(Sint5 seed);
+#endif
 
 Sint3 leveldat[8][MHEIGHT][MWIDTH]=
 {{"S   B     HHHHS",
@@ -205,6 +208,9 @@ void game(void)
         randv=replay_play_seed();
       else
         randv=getlrt();
+#ifdef DIGGER_ELKS
+      srandno(randv);
+#endif
 #else
       if (playing)
         randv=playgetrand();
@@ -1061,11 +1067,116 @@ void parsecmd(int argc,char *argv[])
 
 Sint5 randv;
 
+#ifdef DIGGER_ELKS
+/*
+   ELKS/8086 fast gameplay RNG.
+
+   The original DOS Digger RNG is a 32-bit LCG followed by a modulo:
+
+     randv = randv * 0x015a4e35L + 1;
+     return (randv & 0x7fffffffL) % n;
+
+   On an 8086 this costs several 16-bit multiplies plus division for the
+   modulo operation.  Digger's gameplay RNG users currently request only
+   small ranges from monster.c, so use SFC16 plus an 8-bit multiply-high
+   range reduction instead.  This is not DOS replay-compatible, but it is
+   deterministic for ELKS recordings because the same 32-bit randv seed is
+   still written to/read from DRF before seeding the SFC state.
+*/
+static Uint4 rng_a,rng_b,rng_c,rng_ctr;
+
+static Uint4 rng16(void)
+{
+  Uint4 t,b,c;
+
+  t=(Uint4)(rng_a+rng_b+rng_ctr);
+  rng_ctr++;
+
+  b=rng_b;
+  c=rng_c;
+  rng_a=(Uint4)(b^(b>>5));
+  rng_b=(Uint4)(c+(c<<3));       /* c * 9, avoiding 16-bit MUL */
+  rng_c=(Uint4)(((c<<6)|(c>>10))+t);  /* rotl16(c,6), inline */
+
+  return t;
+}
+
+static void srandno(Sint5 seed)
+{
+  Uint4 lo,hi;
+  Sint4 i;
+
+  lo=(Uint4)seed;
+  hi=(Uint4)((Uint5)seed>>16);
+
+  rng_a=(Uint4)(0xf1ea^lo);
+  rng_b=(Uint4)(0x9e37+hi);
+  rng_c=(Uint4)(0xb529^((lo<<8)|(lo>>8))^hi);
+  rng_ctr=1;
+
+  for (i=0;i<12;i++)
+    rng16();
+}
+
+Sint4 randno(Sint4 n)
+{
+  Uint4 r;
+
+  if (n<=1)
+    return 0;
+
+  r=rng16();
+
+  if (n<=256) {
+    /*
+       Fast bounded result for Digger's small gameplay ranges:
+
+         floor((high_byte(random16) * n) / 256)
+
+       n==256 is exactly the high byte of the RNG output.
+
+       For ia16 this is forced to an 8086 byte multiply:
+
+         mov al,ah
+         mul r/m8
+         mov al,ah
+         xor ah,ah
+
+       That avoids both DIV and the compiler's default 16-bit MUL.
+    */
+    if (n==256)
+      return (Sint4)(r>>8);
+
+#ifdef __ia16__
+    Uint4 ax;
+    Uint3 nb;
+
+    ax=r;
+    nb=(Uint3)n;
+    asm volatile (
+      "movb %%ah,%%al\n\t"
+      "mulb %1\n\t"
+      "movb %%ah,%%al\n\t"
+      "xorb %%ah,%%ah"
+      : "+a" (ax)
+      : "m" (nb)
+      : "cc");
+    return (Sint4)ax;
+#else
+    return (Sint4)((((r>>8)&0xff)*(Uint4)n)>>8);
+#endif
+  }
+
+  /* Rare generic fallback for any future larger bound. */
+  return (Sint4)(((Uint5)r*(Uint5)n)>>16);
+}
+#else
 Sint4 randno(Sint4 n)
 {
   randv=randv*0x15a4e35l+1;
   return (Sint4)((randv&0x7fffffffl)%n);
 }
+#endif
 
 char *keynames[17]={"Right","Up","Left","Down","Fire",
                     "Right","Up","Left","Down","Fire",
